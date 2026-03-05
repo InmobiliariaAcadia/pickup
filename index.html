@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#2d1b00" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Camioneta Pickup</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-sub">Control de uso familiar</div>
+    <div class="header-title">🛻 Camioneta Pickup</div>
+    <div id="hoy-status" class="hoy-status">Libre hoy</div>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="tabs">
+    <button class="tab active" data-view="semana">📆<span>Semana</span></button>
+    <button class="tab" data-view="mes">🗓<span>Mes</span></button>
+    <button class="tab" data-view="reservar">＋<span>Reservar</span></button>
+    <button class="tab" data-view="lista">📋<span>Lista</span></button>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ── SEMANA ── -->
+    <section id="view-semana" class="view active">
+      <div class="week-nav">
+        <button class="nav-btn" id="prev-week">‹</button>
+        <span id="week-label" class="week-label"></span>
+        <button class="nav-btn" id="next-week">›</button>
+      </div>
+      <div id="week-grid" class="week-grid"></div>
+      <div class="legend" id="legend-semana"></div>
+    </section>
+
+    <!-- ── MES ── -->
+    <section id="view-mes" class="view">
+      <div class="week-nav">
+        <button class="nav-btn" id="prev-month">‹</button>
+        <span id="month-label" class="week-label"></span>
+        <button class="nav-btn" id="next-month">›</button>
+      </div>
+      <div class="cal-day-labels">
+        <span>Lun</span><span>Mar</span><span>Mié</span>
+        <span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <div class="legend" id="legend-mes"></div>
+    </section>
+
+    <!-- ── RESERVAR ── -->
+    <section id="view-reservar" class="view">
+      <div class="card">
+        <h2 class="card-title">Nueva Reserva</h2>
+
+        <label class="label">Fecha</label>
+        <input type="date" id="input-fecha" class="input" />
+
+        <label class="label">¿Quién lo usa?</label>
+        <div class="pill-group" id="pill-miembro"></div>
+
+        <label class="label">Turno</label>
+        <div class="pill-group" id="pill-turno"></div>
+
+        <label class="label">Nota (opcional)</label>
+        <input type="text" id="input-nota" class="input" placeholder="ej. mandado, escuela, trabajo..." />
+
+        <div id="email-status" class="email-status hidden"></div>
+
+        <button id="btn-confirmar" class="btn-primary">Confirmar Reserva</button>
+      </div>
+    </section>
+
+    <!-- ── LISTA ── -->
+    <section id="view-lista" class="view">
+      <h2 class="section-title">Reservas Próximas</h2>
+      <div id="lista-content"></div>
+    </section>
+
+  </main>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- CONFIG MODAL (EmailJS setup) -->
+  <div id="config-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 class="modal-title">⚙️ Configurar Email</h3>
+      <p class="modal-desc">Para enviar notificaciones necesitas configurar EmailJS una sola vez.</p>
+      <label class="label">Public Key de EmailJS</label>
+      <input type="text" id="cfg-public-key" class="input" placeholder="ej. user_xxxxxxxxxxxxxxx" />
+      <label class="label">Service ID</label>
+      <input type="text" id="cfg-service-id" class="input" placeholder="ej. service_xxxxxxx" />
+      <label class="label">Template ID</label>
+      <input type="text" id="cfg-template-id" class="input" placeholder="ej. template_xxxxxxx" />
+      <button id="btn-save-config" class="btn-primary">Guardar</button>
+      <button id="btn-skip-config" class="btn-secondary">Ahora no</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
