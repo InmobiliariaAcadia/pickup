@@ -1,3 +1,8 @@
+// ── EMAILJS CONFIG ────────────────────────────────────────────────────────────
+const EJS_PUBLIC_KEY  = "5qW-FRI21sy3_cz5k";
+const EJS_SERVICE_ID  = "service_ncgd8kd";
+const EJS_TEMPLATE_ID = "template_gy5rut9";
+
 // ── FIREBASE CONFIG ──────────────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -95,6 +100,22 @@ function startListening() {
     showSync(false);
     showToast("⚠️ Error de conexión");
   });
+}
+
+// ── EMAILJS: ENVIAR AVISO ─────────────────────────────────────────────────────
+async function sendEmail(booking) {
+  try {
+    await emailjs.send(EJS_SERVICE_ID, EJS_TEMPLATE_ID, {
+      miembro:    booking.member,
+      fecha:      fechaLegible(booking.date),
+      turno:      booking.slot,
+      nota:       booking.note || "—",
+      fecha_hora: new Date().toLocaleString("es-MX"),
+    });
+    console.log("Email enviado ✓");
+  } catch(e) {
+    console.error("Error enviando email:", e);
+  }
 }
 
 // ── FIREBASE: GUARDAR RESERVA ─────────────────────────────────────────────────
@@ -365,6 +386,7 @@ async function addBooking() {
 
   document.getElementById("btn-confirmar").disabled = true;
   await saveBooking(key, data);
+  sendEmail(data); // enviar email en segundo plano
   document.getElementById("btn-confirmar").disabled = false;
 
   document.getElementById("input-nota").value = "";
@@ -422,6 +444,9 @@ function init() {
   });
 
   document.getElementById("btn-confirmar").addEventListener("click", addBooking);
+
+  // Inicializar EmailJS
+  emailjs.init({ publicKey: EJS_PUBLIC_KEY });
 
   // Conectar con Firebase y escuchar cambios en tiempo real
   startListening();
