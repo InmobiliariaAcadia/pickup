@@ -8,7 +8,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Camioneta Pickup</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -16,7 +15,9 @@
   <header class="header">
     <div class="header-sub">Control de uso familiar</div>
     <div class="header-title">🛻 Camioneta Pickup</div>
-    <div id="hoy-status" class="hoy-status">Libre hoy</div>
+    <div id="hoy-status" class="hoy-status">
+      <span class="hoy-libre">Cargando...</span>
+    </div>
   </header>
 
   <!-- NAV TABS -->
@@ -73,8 +74,6 @@
         <label class="label">Nota (opcional)</label>
         <input type="text" id="input-nota" class="input" placeholder="ej. mandado, escuela, trabajo..." />
 
-        <div id="email-status" class="email-status hidden"></div>
-
         <button id="btn-confirmar" class="btn-primary">Confirmar Reserva</button>
       </div>
     </section>
@@ -90,22 +89,10 @@
   <!-- TOAST -->
   <div id="toast" class="toast hidden"></div>
 
-  <!-- CONFIG MODAL (EmailJS setup) -->
-  <div id="config-modal" class="modal-overlay hidden">
-    <div class="modal">
-      <h3 class="modal-title">⚙️ Configurar Email</h3>
-      <p class="modal-desc">Para enviar notificaciones necesitas configurar EmailJS una sola vez.</p>
-      <label class="label">Public Key de EmailJS</label>
-      <input type="text" id="cfg-public-key" class="input" placeholder="ej. user_xxxxxxxxxxxxxxx" />
-      <label class="label">Service ID</label>
-      <input type="text" id="cfg-service-id" class="input" placeholder="ej. service_xxxxxxx" />
-      <label class="label">Template ID</label>
-      <input type="text" id="cfg-template-id" class="input" placeholder="ej. template_xxxxxxx" />
-      <button id="btn-save-config" class="btn-primary">Guardar</button>
-      <button id="btn-skip-config" class="btn-secondary">Ahora no</button>
-    </div>
-  </div>
+  <!-- Indicador de sincronización -->
+  <div id="sync-indicator" class="sync-indicator hidden">🔄 Sincronizando...</div>
 
-  <script src="app.js"></script>
+  <!-- Firebase SDK -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>

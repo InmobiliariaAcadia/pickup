@@ -1,9 +1,27 @@
-// ── CONFIG ──────────────────────────────────────────────────────────────────
+// ── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore, collection, doc,
+  setDoc, deleteDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyAROBWOCx1ZKYAbcXIYS60CH5-qxq9xSao",
+  authDomain:        "camioneta-pickup.firebaseapp.com",
+  projectId:         "camioneta-pickup",
+  storageBucket:     "camioneta-pickup.firebasestorage.app",
+  messagingSenderId: "387324277494",
+  appId:             "1:387324277494:web:92a1d536b790571ad6f2d7",
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const COLECCION = "reservas";
+
+// ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
 const FAMILIA = ["Reytek", "Acadia", "Luison", "Laurita", "Alejandra", "Doña Laura"];
-const VEHICULO = "Camioneta Pickup";
-const EMAIL_DESTINO = "rocio@acadiainmobiliaria.com";
-const TURNOS = ["Todo el día", "Mañana", "Tarde", "Noche"];
-const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const TURNOS  = ["Todo el día", "Mañana", "Tarde", "Noche"];
+const MESES   = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DIAS_LARGO = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 
 const COLORES = {
@@ -15,36 +33,32 @@ const COLORES = {
   "Doña Laura": { bg: "#e0f5f5", text: "#1a7a7a", dot: "#2aadad", card: "#90dada" },
 };
 
-// ── STATE ────────────────────────────────────────────────────────────────────
-let bookings = {};
-let currentView = "semana";
-let weekStart = getWeekStart(todayStr());
+// ── ESTADO ────────────────────────────────────────────────────────────────────
+let bookings = {};          // { key: { member, slot, note, date } }
+let currentView  = "semana";
+let weekStart    = getWeekStart(todayStr());
 let calYear, calMonth;
 let selectedMember = FAMILIA[0];
-let selectedTurno = TURNOS[0];
+let selectedTurno  = TURNOS[0];
 
-// EmailJS config
-let ejsPublicKey = localStorage.getItem("ejs_public_key") || "";
-let ejsServiceId = localStorage.getItem("ejs_service_id") || "";
-let ejsTemplateId = localStorage.getItem("ejs_template_id") || "";
-
-// ── UTILS ────────────────────────────────────────────────────────────────────
+// ── UTILS ─────────────────────────────────────────────────────────────────────
 function todayStr() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
+function pad(n) { return String(n).padStart(2, "0"); }
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + "T12:00:00");
   d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
 function getWeekStart(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
 function fechaLegible(dateStr) {
@@ -66,19 +80,54 @@ function getBookingsForDate(dateStr) {
     .map(([k, v]) => ({ key: k, ...v }));
 }
 
-// ── STORAGE ──────────────────────────────────────────────────────────────────
-function saveBookings() {
-  localStorage.setItem("pickup_bookings", JSON.stringify(bookings));
+// ── FIREBASE: ESCUCHAR CAMBIOS EN TIEMPO REAL ─────────────────────────────────
+function startListening() {
+  showSync(true);
+  onSnapshot(collection(db, COLECCION), (snapshot) => {
+    bookings = {};
+    snapshot.forEach(docSnap => {
+      bookings[docSnap.id] = docSnap.data();
+    });
+    showSync(false);
+    renderAll();
+  }, (error) => {
+    console.error("Error escuchando Firestore:", error);
+    showSync(false);
+    showToast("⚠️ Error de conexión");
+  });
 }
 
-function loadBookings() {
+// ── FIREBASE: GUARDAR RESERVA ─────────────────────────────────────────────────
+async function saveBooking(key, data) {
+  showSync(true);
   try {
-    const raw = localStorage.getItem("pickup_bookings");
-    if (raw) bookings = JSON.parse(raw);
-  } catch(e) {}
+    await setDoc(doc(db, COLECCION, key), data);
+  } catch(e) {
+    console.error("Error guardando:", e);
+    showToast("⚠️ No se pudo guardar. Revisa tu conexión.");
+  }
 }
 
-// ── TOAST ────────────────────────────────────────────────────────────────────
+// ── FIREBASE: ELIMINAR RESERVA ────────────────────────────────────────────────
+async function deleteBooking(key) {
+  showSync(true);
+  try {
+    await deleteDoc(doc(db, COLECCION, key));
+    showToast("Reserva eliminada.");
+  } catch(e) {
+    console.error("Error eliminando:", e);
+    showToast("⚠️ No se pudo eliminar. Revisa tu conexión.");
+  }
+}
+
+// ── SYNC INDICATOR ────────────────────────────────────────────────────────────
+function showSync(on) {
+  const el = document.getElementById("sync-indicator");
+  if (on) el.classList.remove("hidden");
+  else    el.classList.add("hidden");
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
 let toastTimer;
 function showToast(msg) {
   const el = document.getElementById("toast");
@@ -88,48 +137,21 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
-// ── EMAIL ────────────────────────────────────────────────────────────────────
-function initEmailJS() {
-  if (ejsPublicKey) {
-    emailjs.init({ publicKey: ejsPublicKey });
+// ── HEADER ────────────────────────────────────────────────────────────────────
+function renderHeaderStatus() {
+  const el = document.getElementById("hoy-status");
+  const todayB = getBookingsForDate(todayStr());
+  if (todayB.length === 0) {
+    el.innerHTML = `<span class="hoy-libre">Libre hoy</span>`;
+  } else {
+    el.innerHTML = todayB.map(b => {
+      const c = COLORES[b.member] || {};
+      return `<span class="hoy-pill" style="background:${c.bg};color:${c.text}">${b.member} — ${b.slot}</span>`;
+    }).join("");
   }
 }
 
-async function sendEmail(booking) {
-  const statusEl = document.getElementById("email-status");
-
-  if (!ejsPublicKey || !ejsServiceId || !ejsTemplateId) {
-    // No config yet — skip silently (user chose "Ahora no")
-    return;
-  }
-
-  statusEl.textContent = "📧 Enviando aviso...";
-  statusEl.className = "email-status sending";
-
-  const params = {
-    to_email:  EMAIL_DESTINO,
-    vehiculo:  VEHICULO,
-    miembro:   booking.member,
-    fecha:     fechaLegible(booking.date),
-    turno:     booking.slot,
-    nota:      booking.note || "—",
-    fecha_hora: new Date().toLocaleString("es-MX"),
-  };
-
-  try {
-    await emailjs.send(ejsServiceId, ejsTemplateId, params);
-    statusEl.textContent = "✅ Aviso enviado a Rocío";
-    statusEl.className = "email-status ok";
-    setTimeout(() => statusEl.classList.add("hidden"), 4000);
-  } catch(err) {
-    console.error("EmailJS error:", err);
-    statusEl.textContent = "⚠️ Reserva guardada, pero no se pudo enviar el email";
-    statusEl.className = "email-status error";
-    setTimeout(() => statusEl.classList.add("hidden"), 5000);
-  }
-}
-
-// ── RENDER HELPERS ───────────────────────────────────────────────────────────
+// ── BOOKING CARD ──────────────────────────────────────────────────────────────
 function renderBookingCard(b, container) {
   const c = COLORES[b.member] || { bg:"#eee", text:"#333", dot:"#999", card:"#ddd" };
   const div = document.createElement("div");
@@ -144,45 +166,27 @@ function renderBookingCard(b, container) {
     </div>
     <button class="btn-remove" data-key="${b.key}">×</button>
   `;
-  div.querySelector(".btn-remove").addEventListener("click", () => {
-    removeBooking(b.key);
-  });
+  div.querySelector(".btn-remove").addEventListener("click", () => deleteBooking(b.key));
   container.appendChild(div);
 }
 
-function renderLegend(containerId) {
-  const el = document.getElementById(containerId);
+function renderLegend(id) {
+  const el = document.getElementById(id);
   el.innerHTML = "";
   FAMILIA.forEach(m => {
-    const c = COLORES[m];
     const item = document.createElement("div");
     item.className = "legend-item";
-    item.innerHTML = `<div class="dot" style="background:${c.dot};width:9px;height:9px"></div>${m}`;
+    item.innerHTML = `<div class="dot" style="background:${COLORES[m].dot};width:9px;height:9px"></div>${m}`;
     el.appendChild(item);
   });
 }
 
-// ── HEADER STATUS ────────────────────────────────────────────────────────────
-function renderHeaderStatus() {
-  const el = document.getElementById("hoy-status");
-  const today = todayStr();
-  const todayB = getBookingsForDate(today);
-  if (todayB.length === 0) {
-    el.innerHTML = `<span class="hoy-libre">Libre hoy</span>`;
-  } else {
-    el.innerHTML = todayB.map(b => {
-      const c = COLORES[b.member] || {};
-      return `<span class="hoy-pill" style="background:${c.bg};color:${c.text}">${b.member} — ${b.slot}</span>`;
-    }).join("");
-  }
-}
-
-// ── WEEK VIEW ────────────────────────────────────────────────────────────────
+// ── SEMANA ────────────────────────────────────────────────────────────────────
 function renderWeek() {
-  const today = todayStr();
+  const today    = todayStr();
   const weekDays = Array.from({length:7}, (_,i) => addDays(weekStart, i));
-  const wsDate = new Date(weekStart + "T12:00:00");
-  const weDate = new Date(addDays(weekStart, 6) + "T12:00:00");
+  const wsDate   = new Date(weekStart + "T12:00:00");
+  const weDate   = new Date(addDays(weekStart, 6) + "T12:00:00");
 
   document.getElementById("week-label").textContent =
     `${wsDate.getDate()} ${MESES[wsDate.getMonth()].slice(0,3)} – ${weDate.getDate()} ${MESES[weDate.getMonth()].slice(0,3)} ${weDate.getFullYear()}`;
@@ -191,13 +195,15 @@ function renderWeek() {
   grid.innerHTML = "";
 
   weekDays.forEach((dateStr, i) => {
-    const dayB = getBookingsForDate(dateStr);
+    const dayB    = getBookingsForDate(dateStr);
     const isToday = dateStr === today;
     const isPast  = dateStr < today;
-    const d = new Date(dateStr + "T12:00:00");
+    const d       = new Date(dateStr + "T12:00:00");
 
     const dayEl = document.createElement("div");
-    dayEl.className = "week-day" + (isToday ? " is-today" : "") + (isPast && !isToday ? " is-past" : "");
+    dayEl.className = "week-day" +
+      (isToday ? " is-today" : "") +
+      (isPast && !isToday ? " is-past" : "");
 
     const header = document.createElement("div");
     header.className = "week-day-header";
@@ -223,7 +229,6 @@ function renderWeek() {
     grid.appendChild(dayEl);
   });
 
-  // "+ Añadir" buttons
   grid.querySelectorAll(".btn-add-day").forEach(btn => {
     btn.addEventListener("click", () => {
       document.getElementById("input-fecha").value = btn.dataset.date;
@@ -234,34 +239,30 @@ function renderWeek() {
   renderLegend("legend-semana");
 }
 
-// ── MONTH VIEW ───────────────────────────────────────────────────────────────
+// ── MES ───────────────────────────────────────────────────────────────────────
 function renderMonth() {
   const today = todayStr();
   document.getElementById("month-label").textContent = `${MESES[calMonth]} ${calYear}`;
 
-  const grid = document.getElementById("cal-grid");
+  const grid     = document.getElementById("cal-grid");
   grid.innerHTML = "";
-  const days = getDaysInMonth(calYear, calMonth);
+  const days     = getDaysInMonth(calYear, calMonth);
   const firstDay = getFirstDay(calYear, calMonth);
 
-  // Empty cells
-  for (let i=0; i<firstDay; i++) {
-    grid.appendChild(document.createElement("div"));
-  }
+  for (let i=0; i<firstDay; i++) grid.appendChild(document.createElement("div"));
 
   for (let d=1; d<=days; d++) {
-    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const dayB = getBookingsForDate(dateStr);
+    const dateStr = `${calYear}-${pad(calMonth+1)}-${pad(d)}`;
+    const dayB    = getBookingsForDate(dateStr);
     const isToday = dateStr === today;
     const isPast  = dateStr < today;
 
     const cell = document.createElement("div");
-    cell.className = "cal-cell" + (isToday ? " is-today" : "") + (isPast ? " is-past" : "");
+    cell.className = "cal-cell" +
+      (isToday ? " is-today" : "") +
+      (isPast  ? " is-past"  : "");
 
-    const num = document.createElement("div");
-    num.className = "cal-num";
-    num.textContent = d;
-    cell.appendChild(num);
+    cell.innerHTML = `<div class="cal-num">${d}</div>`;
 
     if (dayB.length) {
       const dots = document.createElement("div");
@@ -286,9 +287,9 @@ function renderMonth() {
   renderLegend("legend-mes");
 }
 
-// ── LISTA VIEW ───────────────────────────────────────────────────────────────
+// ── LISTA ─────────────────────────────────────────────────────────────────────
 function renderLista() {
-  const today = todayStr();
+  const today     = todayStr();
   const container = document.getElementById("lista-content");
   container.innerHTML = "";
 
@@ -317,45 +318,36 @@ function renderLista() {
       </div>
       <button class="btn-remove" data-key="${key}">×</button>
     `;
-    card.querySelector(".btn-remove").addEventListener("click", () => removeBooking(key));
+    card.querySelector(".btn-remove").addEventListener("click", () => deleteBooking(key));
     container.appendChild(card);
   });
 }
 
-// ── FORM (RESERVAR) ──────────────────────────────────────────────────────────
+// ── FORM ──────────────────────────────────────────────────────────────────────
 function renderForm() {
-  // Member pills
   const mGroup = document.getElementById("pill-miembro");
   mGroup.innerHTML = "";
   FAMILIA.forEach(m => {
-    const c = COLORES[m];
     const btn = document.createElement("button");
     btn.className = "pill" + (m === selectedMember ? " active" : "");
     btn.textContent = m;
-    if (m === selectedMember) btn.style.background = c.dot;
-    btn.addEventListener("click", () => {
-      selectedMember = m;
-      renderForm();
-    });
+    if (m === selectedMember) btn.style.background = COLORES[m].dot;
+    btn.addEventListener("click", () => { selectedMember = m; renderForm(); });
     mGroup.appendChild(btn);
   });
 
-  // Turno pills
   const tGroup = document.getElementById("pill-turno");
   tGroup.innerHTML = "";
   TURNOS.forEach(t => {
     const btn = document.createElement("button");
     btn.className = "pill pill-turno" + (t === selectedTurno ? " active" : "");
     btn.textContent = t;
-    btn.addEventListener("click", () => {
-      selectedTurno = t;
-      renderForm();
-    });
+    btn.addEventListener("click", () => { selectedTurno = t; renderForm(); });
     tGroup.appendChild(btn);
   });
 }
 
-// ── ADD / REMOVE BOOKING ─────────────────────────────────────────────────────
+// ── AGREGAR RESERVA ───────────────────────────────────────────────────────────
 async function addBooking() {
   const fecha = document.getElementById("input-fecha").value;
   const nota  = document.getElementById("input-nota").value.trim();
@@ -363,38 +355,28 @@ async function addBooking() {
   if (!fecha) { showToast("⚠️ Selecciona una fecha"); return; }
 
   const key = `${fecha}_${selectedTurno}`;
+
   if (bookings[key]) {
     showToast(`¡Ya reservado por ${bookings[key].member} — ${selectedTurno}!`);
     return;
   }
 
-  const booking = { member: selectedMember, slot: selectedTurno, note: nota, date: fecha };
-  bookings[key] = booking;
-  saveBookings();
+  const data = { member: selectedMember, slot: selectedTurno, note: nota, date: fecha };
 
-  // Reset nota
+  document.getElementById("btn-confirmar").disabled = true;
+  await saveBooking(key, data);
+  document.getElementById("btn-confirmar").disabled = false;
+
   document.getElementById("input-nota").value = "";
-
   showToast(`✓ Reservado para ${selectedMember} — ${fechaCorta(fecha)}`);
-  renderAll();
   switchView("semana");
-
-  // Send email (async, non-blocking)
-  await sendEmail(booking);
 }
 
-function removeBooking(key) {
-  delete bookings[key];
-  saveBookings();
-  renderAll();
-  showToast("Reserva eliminada.");
-}
-
-// ── VIEWS ────────────────────────────────────────────────────────────────────
+// ── VISTAS ────────────────────────────────────────────────────────────────────
 function switchView(view) {
   currentView = view;
   document.querySelectorAll(".view").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(el  => el.classList.remove("active"));
   document.getElementById("view-" + view).classList.add("active");
   document.querySelector(`[data-view="${view}"]`)?.classList.add("active");
 
@@ -406,98 +388,43 @@ function switchView(view) {
 
 function renderAll() {
   renderHeaderStatus();
-  if (currentView === "semana")   renderWeek();
-  if (currentView === "mes")      renderMonth();
-  if (currentView === "lista")    renderLista();
+  if (currentView === "semana") renderWeek();
+  if (currentView === "mes")    renderMonth();
+  if (currentView === "lista")  renderLista();
 }
 
-// ── CONFIG MODAL ─────────────────────────────────────────────────────────────
-function openConfigModal() {
-  document.getElementById("cfg-public-key").value  = ejsPublicKey;
-  document.getElementById("cfg-service-id").value  = ejsServiceId;
-  document.getElementById("cfg-template-id").value = ejsTemplateId;
-  document.getElementById("config-modal").classList.remove("hidden");
-}
-
-function closeConfigModal() {
-  document.getElementById("config-modal").classList.add("hidden");
-}
-
-// ── GEAR BUTTON ──────────────────────────────────────────────────────────────
-function addGearButton() {
-  const btn = document.createElement("button");
-  btn.className = "cfg-btn";
-  btn.title = "Configurar EmailJS";
-  btn.textContent = "⚙️";
-  btn.addEventListener("click", openConfigModal);
-  document.body.appendChild(btn);
-}
-
-// ── INIT ─────────────────────────────────────────────────────────────────────
+// ── INICIO ────────────────────────────────────────────────────────────────────
 function init() {
   const now = new Date();
   calYear  = now.getFullYear();
   calMonth = now.getMonth();
 
-  loadBookings();
-  initEmailJS();
-  addGearButton();
-
-  // Set today as default date in form
   document.getElementById("input-fecha").value = todayStr();
-  // Restrict past dates
-  document.getElementById("input-fecha").min = todayStr();
+  document.getElementById("input-fecha").min   = todayStr();
 
-  // Tab nav
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => switchView(tab.dataset.view));
   });
 
-  // Week nav
   document.getElementById("prev-week").addEventListener("click", () => {
-    weekStart = addDays(weekStart, -7);
-    renderWeek();
+    weekStart = addDays(weekStart, -7); renderWeek();
   });
   document.getElementById("next-week").addEventListener("click", () => {
-    weekStart = addDays(weekStart, 7);
-    renderWeek();
+    weekStart = addDays(weekStart, 7); renderWeek();
   });
-
-  // Month nav
   document.getElementById("prev-month").addEventListener("click", () => {
-    if (calMonth === 0) { calMonth = 11; calYear--; } else { calMonth--; }
+    if (calMonth === 0) { calMonth=11; calYear--; } else calMonth--;
     renderMonth();
   });
   document.getElementById("next-month").addEventListener("click", () => {
-    if (calMonth === 11) { calMonth = 0; calYear++; } else { calMonth++; }
+    if (calMonth === 11) { calMonth=0; calYear++; } else calMonth++;
     renderMonth();
   });
 
-  // Confirm booking
   document.getElementById("btn-confirmar").addEventListener("click", addBooking);
 
-  // Config modal
-  document.getElementById("btn-save-config").addEventListener("click", () => {
-    ejsPublicKey  = document.getElementById("cfg-public-key").value.trim();
-    ejsServiceId  = document.getElementById("cfg-service-id").value.trim();
-    ejsTemplateId = document.getElementById("cfg-template-id").value.trim();
-    localStorage.setItem("ejs_public_key",  ejsPublicKey);
-    localStorage.setItem("ejs_service_id",  ejsServiceId);
-    localStorage.setItem("ejs_template_id", ejsTemplateId);
-    initEmailJS();
-    closeConfigModal();
-    showToast("✅ Configuración guardada");
-  });
-
-  document.getElementById("btn-skip-config").addEventListener("click", closeConfigModal);
-
-  // Show config modal on first visit if not configured
-  if (!ejsPublicKey) {
-    setTimeout(openConfigModal, 800);
-  }
-
-  // Initial render
-  switchView("semana");
+  // Conectar con Firebase y escuchar cambios en tiempo real
+  startListening();
 }
 
 document.addEventListener("DOMContentLoaded", init);
